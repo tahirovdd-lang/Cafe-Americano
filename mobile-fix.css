@@ -1,8 +1,7 @@
 /* Mobile fixes: compact promo block, framed image, shifted progress ring and centered header */
 @media (max-width: 539px) {
   .top {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding: 22px 18px 18px;
   }
 
   .brand {
@@ -10,7 +9,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 15px;
     width: 100%;
     text-align: center;
   }
@@ -21,18 +20,31 @@
   }
 
   .brand .logo {
+    width: 94px;
+    height: 94px;
     margin: 0 auto;
+    font-size: 55px;
+    font-weight: 800;
+    border-width: 2px;
   }
 
   .brand-name {
     width: 100%;
     text-align: center;
     white-space: normal;
+    font-size: 29px;
+    line-height: 1.05;
+    letter-spacing: 6px;
+    font-weight: 950;
   }
 
   .slogan {
     width: 100%;
     text-align: center;
+    margin-top: 9px;
+    font-size: 18px;
+    line-height: 1.25;
+    font-weight: 850;
   }
 
   .contacts {
@@ -41,8 +53,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    margin-top: 4px;
+    gap: 13px;
+    margin-top: 8px;
   }
 
   .contact {
@@ -50,10 +62,22 @@
     max-width: 100%;
     justify-content: center;
     text-align: center;
+    font-size: 18px;
+    line-height: 1.2;
+    font-weight: 950;
+  }
+
+  .contact i {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+    font-size: 22px;
+    border-width: 2px;
   }
 
   .divider {
     width: 100%;
+    margin: 20px 0 16px;
   }
 
   .hero {
