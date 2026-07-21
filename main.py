@@ -10,16 +10,22 @@ import database
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_FILES = {
     "style.css",
+    "mobile-fix.css",
     "app.js",
     "api.js",
 }
 IMAGES_DIR = BASE_DIR / "images"
 
 
-async def index(_: web.Request) -> web.StreamResponse:
-    response = web.FileResponse(BASE_DIR / "index.html")
-    response.headers["Cache-Control"] = "no-cache"
+def no_cache(response: web.StreamResponse) -> web.StreamResponse:
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return response
+
+
+async def index(_: web.Request) -> web.StreamResponse:
+    return no_cache(web.FileResponse(BASE_DIR / "index.html"))
 
 
 async def static_file(request: web.Request) -> web.StreamResponse:
@@ -35,8 +41,7 @@ async def static_file(request: web.Request) -> web.StreamResponse:
     response = web.FileResponse(path)
     if content_type:
         response.content_type = content_type
-    response.headers["Cache-Control"] = "no-cache"
-    return response
+    return no_cache(response)
 
 
 async def image_file(request: web.Request) -> web.StreamResponse:
@@ -49,8 +54,7 @@ async def image_file(request: web.Request) -> web.StreamResponse:
     response = web.FileResponse(path)
     if content_type:
         response.content_type = content_type
-    response.headers["Cache-Control"] = "public, max-age=3600"
-    return response
+    return no_cache(response)
 
 
 async def favicon(_: web.Request) -> web.Response:
@@ -63,7 +67,7 @@ async def start_http_server() -> web.AppRunner:
     # Mini App
     app.router.add_get("/", index)
     app.router.add_get("/favicon.ico", favicon)
-    app.router.add_get("/{name:style\\.css|app\\.js|api\\.js}", static_file)
+    app.router.add_get("/{name:style\\.css|mobile-fix\\.css|app\\.js|api\\.js}", static_file)
     app.router.add_get("/images/{name}", image_file)
 
     # API
