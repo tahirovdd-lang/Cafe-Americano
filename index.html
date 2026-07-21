@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#013F4A">
   <title>AMERICANO — Просто. Вкусно. С душой.</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css?v=9">
-  <link rel="stylesheet" href="mobile-fix.css?v=20260721-1">
+  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="mobile-fix.css?v=20260721-2">
 </head>
 <body>
 <div class="app">
@@ -15,10 +15,10 @@
     <header class="top">
       <div class="brand">
         <div class="logo">A</div>
-        <div><div class="brand-name">AMERICANO</div><div class="slogan">Просто. Вкусно. С душой.</div></div>
+        <div><div class="brand-name">AMERICANO</div><div class="slogan" data-i18n="slogan">Просто. Вкусно. С душой.</div></div>
         <div class="contacts">
           <a class="contact" href="tel:+998913143007"><i>☎</i>+998 (91) 314-30-07</a>
-          <a class="contact" href="https://instagram.com/americano.coffeeuz"><i>◎</i>americano.coffeeuz</a>
+          <a class="contact" href="https://www.instagram.com/americano.coffeeuz/"><i>◎</i>americano.coffeeuz</a>
         </div>
       </div>
       <div class="divider"></div>
@@ -33,51 +33,40 @@
       <div class="hero">
         <div class="progress-ring" id="progressRing"><span data-progress>0/6</span></div>
         <div class="hero-copy">
-          <h2>Каждый 6-й кофе<strong>В подарок!</strong></h2>
-          <p>Действует во всех 3 филиалах</p>
-          <p><b data-left>6</b> кофе до подарка</p>
-          <button class="primary" onclick="requestCard()">🎁 Подробнее</button>
+          <h2><span data-i18n="everySixth">Каждый 6-й кофе</span><strong data-i18n="gift">В подарок!</strong></h2>
+          <p data-i18n="allBranches">Действует во всех 3 филиалах</p>
+          <p><b data-left>6</b> <span data-i18n="coffeeToGift">кофе до подарка</span></p>
+          <button class="primary" onclick="requestCard()">🎁 <span data-i18n="details">Подробнее</span></button>
         </div>
-        <div class="hero-media">
-          <img class="cup-photo" src="/images/americano-cup.png?v=20260721-2" alt="Стакан Americano" loading="eager" decoding="async">
-        </div>
+        <div class="hero-media"><img class="cup-photo" src="/images/americano-cup.png?v=20260721-3" alt="Americano" loading="eager"></div>
       </div>
     </div>
 
     <div class="section">
-      <div class="title-row"><h3>Категории</h3><button class="link-btn" onclick="openScreen('menuScreen')">Всё меню</button></div>
+      <div class="title-row"><h3 data-i18n="categories">Категории</h3><button class="link-btn" onclick="openScreen('menuScreen')" data-i18n="allMenu">Всё меню</button></div>
       <div class="home-cats" id="homeCats"></div>
     </div>
 
     <div class="section">
-      <div class="title-row"><h3>Моя кофейная карта</h3></div>
-      <div class="guest-card">
-        <div class="guest-grid">
-          <div class="card-visual">
-            <div class="card-logo"><span class="card-mark">A</span><span>AMERICANO</span></div>
-            <div class="stamps"></div>
-          </div>
-          <div class="card-copy">
-            <p class="card-summary"><b><span data-progress>0/6</span> кофе</b> — до подарка осталось <b data-left>6</b></p>
-            <p class="card-summary card-summary-muted">Всего: <b data-total-coffee>0</b> — Подарков: <b data-gifts>0</b></p>
-            <button class="primary" onclick="requestCard()">Открыть карту</button>
-          </div>
+      <div class="title-row"><h3 data-i18n="myCard">Моя кофейная карта</h3></div>
+      <div class="guest-card"><div class="guest-grid">
+        <div class="card-visual"><div class="card-logo"><span class="card-mark">A</span><span>AMERICANO</span></div><div class="stamps"></div></div>
+        <div class="card-copy">
+          <p class="card-summary"><b><span data-progress>0/6</span> <span data-i18n="coffeeWord">кофе</span></b> — <span data-i18n="giftLeft">до подарка осталось</span> <b data-left>6</b></p>
+          <p class="card-summary card-summary-muted"><span data-i18n="totalCoffeeShort">Всего</span>: <b data-total-coffee>0</b> — <span data-i18n="giftsShort">Подарков</span>: <b data-gifts>0</b></p>
+          <button class="primary" onclick="requestCard()" data-i18n="openCard">Открыть карту</button>
         </div>
-      </div>
+      </div></div>
     </div>
   </section>
 
-  <section class="screen" id="menuScreen">
-    <div class="screen-head"><button class="back" onclick="openScreen('homeScreen')">‹</button><h2 id="menuTitle">Меню</h2><span></span></div>
-    <div class="filters" id="filters"></div>
-    <div class="products" id="products"></div>
-  </section>
+  <section class="screen" id="menuScreen"><div class="screen-head"><button class="back" onclick="openScreen('homeScreen')">‹</button><h2 id="menuTitle">Меню</h2><span></span></div><div class="filters" id="filters"></div><div class="products" id="products"></div></section>
 
   <section class="screen" id="cartScreen">
     <div class="screen-head"><button class="back" onclick="openScreen('menuScreen')">‹</button><h2 id="cartTitle">Корзина</h2><span></span></div>
     <div class="panel">
       <div id="cartLines"></div>
-      <div class="line"><b id="totalLabel">Итого</b><b><span id="total">0</span> сум</b></div>
+      <div class="line"><b id="totalLabel">Итого</b><b><span id="total">0</span> <span data-i18n="sum">сум</span></b></div>
       <select class="field" id="branch"><option value="">Выберите филиал</option><option value="branch_1">Americano — Филиал 1</option><option value="branch_2">Americano — Филиал 2</option><option value="branch_3">Americano — Филиал 3</option></select>
       <div class="row"><button class="pill active" id="pickup">Самовывоз</button><button class="pill" id="delivery">Доставка</button></div>
       <input class="field" id="phone" inputmode="tel" placeholder="Номер телефона">
@@ -88,32 +77,30 @@
     </div>
   </section>
 
-  <section class="screen" id="ordersScreen">
-    <div class="screen-head"><button class="back" onclick="openScreen('homeScreen')">‹</button><h2 id="ordersTitle">Мои заказы</h2><span></span></div>
-    <div class="panel" id="ordersList"><div class="empty">Загрузка…</div></div>
-  </section>
+  <section class="screen" id="ordersScreen"><div class="screen-head"><button class="back" onclick="openScreen('homeScreen')">‹</button><h2 id="ordersTitle">Мои заказы</h2><span></span></div><div class="panel" id="ordersList"><div class="empty">Загрузка…</div></div></section>
 
   <section class="screen" id="profileScreen">
     <div class="screen-head"><button class="back" onclick="openScreen('homeScreen')">‹</button><h2 id="profileTitle">Профиль</h2><span></span></div>
     <div class="panel" style="text-align:center">
       <div class="logo" style="margin:auto">A</div>
-      <h2 id="profileName">Гость Americano</h2><p class="meta" id="profileUsername">Telegram</p>
-      <div class="line"><span>Прогресс</span><b data-progress>0/6</b></div>
-      <div class="line"><span>Осталось до подарка</span><b data-left>6</b></div>
-      <div class="line"><span>Всего кофе</span><b data-total-coffee>0</b></div>
-      <div class="line"><span>Получено подарков</span><b data-gifts>0</b></div>
+      <h2 id="profileWelcome">Добро пожаловать в Americano</h2>
+      <p class="meta" id="profileUsername">Telegram</p>
+      <div class="line"><span data-i18n="progress">Прогресс</span><b data-progress>0/6</b></div>
+      <div class="line"><span data-i18n="leftProfile">Осталось до подарка</span><b data-left>6</b></div>
+      <div class="line"><span data-i18n="totalCoffeeProfile">Всего кофе</span><b data-total-coffee>0</b></div>
+      <div class="line"><span data-i18n="giftsProfile">Получено подарков</span><b data-gifts>0</b></div>
     </div>
   </section>
 </div>
 
 <nav class="bottom"><div class="bottom-inner">
-  <button class="nav-btn active" data-screen="homeScreen"><span>⌂</span>Главная</button>
-  <button class="nav-btn" data-screen="menuScreen"><span>▤</span>Меню</button>
-  <button class="nav-btn" data-screen="cartScreen"><span>🛒</span><i class="badge" id="cartBadge">0</i>Корзина</button>
-  <button class="nav-btn" data-screen="ordersScreen"><span>▧</span>Заказы</button>
-  <button class="nav-btn" data-screen="profileScreen"><span>○</span>Профиль</button>
+  <button class="nav-btn active" data-screen="homeScreen"><span>⌂</span><em data-i18n="home">Главная</em></button>
+  <button class="nav-btn" data-screen="menuScreen"><span>▤</span><em data-i18n="menu">Меню</em></button>
+  <button class="nav-btn" data-screen="cartScreen"><span>🛒</span><i class="badge" id="cartBadge">0</i><em data-i18n="cart">Корзина</em></button>
+  <button class="nav-btn" data-screen="ordersScreen"><span>▧</span><em data-i18n="ordersNav">Заказы</em></button>
+  <button class="nav-btn" data-screen="profileScreen"><span>○</span><em data-i18n="profile">Профиль</em></button>
 </div></nav>
 <div class="toast" id="toast"></div>
-<script type="module" src="app.js?v=9"></script>
+<script type="module" src="app.js?v=10"></script>
 </body>
 </html>
