@@ -17,10 +17,13 @@ export const bootstrapProfile = {
 };
 
 const explicitApi = new URLSearchParams(location.search).get('api');
-export const API_BASE = (explicitApi || localStorage.getItem('americano_api_url') || '').replace(/\/$/, '');
+export const API_BASE = (
+  explicitApi ||
+  localStorage.getItem('americano_api_url') ||
+  location.origin
+).replace(/\/$/, '');
 
 async function request(path, options = {}) {
-  if (!API_BASE) throw new Error('API URL is not configured');
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -33,7 +36,7 @@ async function request(path, options = {}) {
 }
 
 export async function loadProfile() {
-  if (!API_BASE || !TelegramApp?.initData) return bootstrapProfile;
+  if (!TelegramApp?.initData) return bootstrapProfile;
   try {
     const result = await request('/api/profile', {
       method: 'POST',
@@ -49,7 +52,7 @@ export async function loadProfile() {
 }
 
 export async function loadOrders() {
-  if (!API_BASE || !TelegramApp?.initData) return [];
+  if (!TelegramApp?.initData) return [];
   try {
     return await request('/api/orders', {
       method: 'POST',
