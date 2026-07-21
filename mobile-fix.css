@@ -1,5 +1,61 @@
-/* Mobile fixes: compact promo block, framed image and shifted progress ring */
+/* Mobile fixes: compact promo block, framed image, shifted progress ring and centered header */
 @media (max-width: 539px) {
+  .top {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .brand > div:nth-child(2) {
+    width: 100%;
+    text-align: center;
+  }
+
+  .brand .logo {
+    margin: 0 auto;
+  }
+
+  .brand-name {
+    width: 100%;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .slogan {
+    width: 100%;
+    text-align: center;
+  }
+
+  .contacts {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .contact {
+    width: auto;
+    max-width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .divider {
+    width: 100%;
+  }
+
   .hero {
     min-height: 204px;
     padding: 13px;
