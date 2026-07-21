@@ -1,12 +1,16 @@
-import { loadOrders, loadProfile, saveOptimisticProfile } from './api.js';
+import { loadOrders, loadProfile, saveLocalOrder, saveOptimisticProfile } from './api.js';
 
 const tg = window.Telegram?.WebApp;
-tg?.ready(); tg?.expand();
-try { tg?.setHeaderColor('#013F4A'); tg?.setBackgroundColor('#013F4A'); } catch (_) {}
+tg?.ready();
+tg?.expand();
+try {
+  tg?.setHeaderColor('#013F4A');
+  tg?.setBackgroundColor('#013F4A');
+} catch (_) {}
 
 const PRODUCTS = [
   {id:'espresso',cat:'hot',price:18000,meta:{ru:'30 мл',uz:'30 ml',en:'30 ml'},is_coffee:true,img:'https://images.unsplash.com/photo-1510707577719-ae7c14805e3a?auto=format&fit=crop&w=600&q=80',n:{ru:'Эспрессо',uz:'Espresso',en:'Espresso'}},
-  {id:'americano',cat:'hot',price:22000,meta:{ru:'250 мл',uz:'250 ml',en:'250 ml'},is_coffee:true,img:'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=600&q=80',n:{ru:'Американо',uz:'Amerikano',en:'Americano'}},
+  {id:'americano',cat:'hot',price:22000,meta:{ru:'250 мл',uz:'250 ml',en:'250 ml'},is_coffee:true,img:'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085e3a?auto=format&fit=crop&w=600&q=80',n:{ru:'Американо',uz:'Amerikano',en:'Americano'}},
   {id:'cappuccino',cat:'hot',price:28000,meta:{ru:'300 мл',uz:'300 ml',en:'300 ml'},is_coffee:true,img:'https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=600&q=80',n:{ru:'Капучино',uz:'Kapuchino',en:'Cappuccino'}},
   {id:'latte',cat:'hot',price:30000,meta:{ru:'350 мл',uz:'350 ml',en:'350 ml'},is_coffee:true,img:'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=600&q=80',n:{ru:'Латте',uz:'Latte',en:'Latte'}},
   {id:'iced_americano',cat:'cold',price:28000,meta:{ru:'400 мл',uz:'400 ml',en:'400 ml'},is_coffee:true,img:'https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=600&q=80',n:{ru:'Айс американо',uz:'Ays amerikano',en:'Iced Americano'}},
@@ -29,6 +33,7 @@ const cart={};
 const $=id=>document.getElementById(id);
 const t=key=>I18N[lang][key]||I18N.ru[key]||key;
 const money=n=>Number(n).toLocaleString(lang==='en'?'en-US':'ru-RU');
+
 function toast(text){const el=$('toast');el.textContent=text;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),1800)}
 function cartCount(){return Object.values(cart).reduce((a,b)=>a+b,0)}
 function cartTotal(){return PRODUCTS.reduce((s,p)=>s+(cart[p.id]||0)*p.price,0)}
@@ -46,11 +51,48 @@ function renderProfile(){const step=profile.step||6,progress=profile.progress||0
 async function refreshProfile(){profile=await loadProfile();renderProfile()}
 async function renderOrders(){$('ordersList').innerHTML=`<div class="empty">${t('loading')}</div>`;const orders=await loadOrders();$('ordersList').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><b>${o.order_id}</b><div class="meta">${String(o.created_at).replace('T',' ').slice(0,16)} · ${o.branch_name}</div><div class="line"><span>☕ ${o.coffee_qty} · 🎁 ${o.free_qty}</span><b>${money(o.final_total)} ${t('sum')}</b></div></article>`).join(''):`<div class="empty">${t('historyEmpty')}</div>`}
 function applyLanguage(){document.documentElement.lang=lang;document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));$('menuTitle').textContent=t('menu');$('cartTitle').textContent=t('cart');$('ordersTitle').textContent=t('orders');$('profileTitle').textContent=t('profile');$('totalLabel').textContent=t('total');$('sendOrder').textContent=t('order');$('pickup').textContent=t('pickup');$('delivery').textContent=t('delivery');$('phone').placeholder=t('phone');$('address').placeholder=t('address');$('comment').placeholder=t('comment');document.querySelector('[data-pay="cash"]').textContent=t('cash');document.querySelector('[data-pay="card"]').textContent=t('card');const branch=$('branch');branch.options[0].text=t('branch');branch.options[1].text=t('branch1');branch.options[2].text=t('branch2');branch.options[3].text=t('branch3');document.querySelectorAll('[data-lang]').forEach(x=>x.classList.toggle('active',x.dataset.lang===lang));renderHomeCategories();renderFilters();renderProducts();renderCart();renderProfile()}
+
 document.querySelectorAll('[data-lang]').forEach(btn=>btn.onclick=()=>{lang=btn.dataset.lang;localStorage.setItem('americano_lang',lang);applyLanguage()});
 document.querySelectorAll('.nav-btn').forEach(btn=>btn.onclick=()=>openScreen(btn.dataset.screen));
 $('pickup').onclick=()=>{fulfillment='pickup';$('pickup').classList.add('active');$('delivery').classList.remove('active');$('address').style.display='none'};
 $('delivery').onclick=()=>{fulfillment='delivery';$('delivery').classList.add('active');$('pickup').classList.remove('active');$('address').style.display='block'};
 document.querySelectorAll('.pay').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.pay').forEach(x=>x.classList.remove('active'));btn.classList.add('active');payment=btn.dataset.pay});
-$('sendOrder').onclick=()=>{const selected=PRODUCTS.filter(p=>cart[p.id]>0);if(!selected.length)return toast(t('empty'));const branch=$('branch');if(!branch.value)return toast(t('branch'));const phone=$('phone').value.trim();if(!phone)return toast(t('enterPhone'));if(fulfillment==='delivery'&&!$('address').value.trim())return toast(t('enterAddress'));const items=selected.map(p=>({id:p.id,qty:cart[p.id],price:p.price,name_ru:p.n.ru,name_lang:p.n[lang],category:p.cat,is_coffee:p.is_coffee,meta:p.meta[lang]}));const coffeeQty=items.filter(i=>i.is_coffee).reduce((s,i)=>s+i.qty,0);const totalProgress=(profile.progress||0)+coffeeQty;const gifts=Math.floor(totalProgress/6);profile={...profile,progress:totalProgress%6,left:6-(totalProgress%6),coffee_total:(profile.coffee_total||0)+coffeeQty,free_total:(profile.free_total||0)+gifts};saveOptimisticProfile(profile);renderProfile();const payload={action:'order',brand:'AMERICANO',branch_id:branch.value,branch_name:branch.options[branch.selectedIndex].text,order_id:`AM-${Date.now()}`,items,total_num:cartTotal(),total:money(cartTotal()),phone,fulfillment,address:fulfillment==='delivery'?$('address').value.trim():'',payment_method:payment,payment_label:payment==='cash'?t('cash'):payment==='click'?'Click':t('card'),comment:$('comment').value.trim(),lang};tg?.sendData(JSON.stringify(payload));setTimeout(()=>tg?.close(),500)};
+
+$('sendOrder').onclick=()=>{
+  const selected=PRODUCTS.filter(p=>cart[p.id]>0);
+  if(!selected.length)return toast(t('empty'));
+  const branch=$('branch');
+  if(!branch.value)return toast(t('branch'));
+  const phone=$('phone').value.trim();
+  if(!phone)return toast(t('enterPhone'));
+  if(fulfillment==='delivery'&&!$('address').value.trim())return toast(t('enterAddress'));
+
+  const items=selected.map(p=>({id:p.id,qty:cart[p.id],price:p.price,name_ru:p.n.ru,name_lang:p.n[lang],category:p.cat,is_coffee:p.is_coffee,meta:p.meta[lang]}));
+  const coffeeQty=items.filter(i=>i.is_coffee).reduce((s,i)=>s+i.qty,0);
+  const totalProgress=(profile.progress||0)+coffeeQty;
+  const gifts=Math.floor(totalProgress/6);
+  profile={...profile,progress:totalProgress%6,left:6-(totalProgress%6),coffee_total:(profile.coffee_total||0)+coffeeQty,free_total:(profile.free_total||0)+gifts};
+  saveOptimisticProfile(profile);
+  renderProfile();
+
+  const orderId=`AM-${Date.now()}`;
+  const totalValue=cartTotal();
+  const createdAt=new Date().toISOString();
+  const payload={action:'order',brand:'AMERICANO',branch_id:branch.value,branch_name:branch.options[branch.selectedIndex].text,order_id:orderId,items,total_num:totalValue,total:money(totalValue),phone,fulfillment,address:fulfillment==='delivery'?$('address').value.trim():'',payment_method:payment,payment_label:payment==='cash'?t('cash'):payment==='click'?'Click':t('card'),comment:$('comment').value.trim(),lang};
+
+  saveLocalOrder({
+    order_id:orderId,
+    branch_name:payload.branch_name,
+    coffee_qty:coffeeQty,
+    free_qty:gifts,
+    final_total:totalValue,
+    created_at:createdAt
+  });
+
+  tg?.sendData(JSON.stringify(payload));
+  setTimeout(()=>tg?.close(),800);
+};
+
 window.requestCard=()=>{tg?.sendData(JSON.stringify({action:'card'}));toast(t('cardSent'))};
-applyLanguage();refreshProfile();
+applyLanguage();
+refreshProfile();
