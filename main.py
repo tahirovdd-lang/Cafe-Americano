@@ -11,6 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_FILES = {
     "style.css",
     "mobile-fix.css",
+    "header-fix.css",
     "app.js",
     "api.js",
 }
@@ -67,7 +68,7 @@ async def start_http_server() -> web.AppRunner:
     # Mini App
     app.router.add_get("/", index)
     app.router.add_get("/favicon.ico", favicon)
-    app.router.add_get("/{name:style\\.css|mobile-fix\\.css|app\\.js|api\\.js}", static_file)
+    app.router.add_get("/{name:style\\.css|mobile-fix\\.css|header-fix\\.css|app\\.js|api\\.js}", static_file)
     app.router.add_get("/images/{name}", image_file)
 
     # API
