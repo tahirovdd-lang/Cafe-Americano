@@ -16,4 +16,4 @@ RUN mkdir -p /app/data
 
 EXPOSE 3000
 
-CMD ["python", "bot.py"]
+CMD ["python", "main.py"]
