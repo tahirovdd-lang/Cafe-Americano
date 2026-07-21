@@ -6,7 +6,24 @@ function queryNumber(name, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-const tgUser = TelegramApp?.initDataUnsafe?.user || {};
+function queryText(name) {
+  return (new URLSearchParams(location.search).get(name) || '').trim();
+}
+
+function userFromInitData() {
+  try {
+    const raw = TelegramApp?.initData || '';
+    if (!raw) return {};
+    const encoded = new URLSearchParams(raw).get('user');
+    return encoded ? JSON.parse(encoded) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+const unsafeUser = TelegramApp?.initDataUnsafe?.user || {};
+const parsedUser = userFromInitData();
+const tgUser = { ...parsedUser, ...unsafeUser };
 
 export const bootstrapProfile = {
   progress: queryNumber('progress', 0),
@@ -14,10 +31,10 @@ export const bootstrapProfile = {
   left: queryNumber('left', 6),
   coffee_total: queryNumber('coffee_total', 0),
   free_total: queryNumber('free_total', 0),
-  first_name: tgUser.first_name || '',
-  last_name: tgUser.last_name || '',
-  username: tgUser.username || '',
-  user_id: tgUser.id || 0,
+  first_name: tgUser.first_name || queryText('first_name'),
+  last_name: tgUser.last_name || queryText('last_name'),
+  username: tgUser.username || queryText('username').replace(/^@/, ''),
+  user_id: tgUser.id || queryNumber('user_id', 0),
 };
 
 const explicitApi = new URLSearchParams(location.search).get('api');
@@ -60,20 +77,32 @@ function mergeOrders(remoteOrders, localOrders) {
     .slice(0, 50);
 }
 
+function mergeProfile(saved = {}, remote = {}) {
+  const merged = { ...bootstrapProfile, ...saved, ...remote };
+  if (!merged.username) merged.username = bootstrapProfile.username;
+  if (!merged.first_name) merged.first_name = bootstrapProfile.first_name;
+  if (!merged.last_name) merged.last_name = bootstrapProfile.last_name;
+  if (!merged.user_id) merged.user_id = bootstrapProfile.user_id;
+  return merged;
+}
+
 export async function loadProfile() {
-  if (!TelegramApp?.initData) return bootstrapProfile;
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('americano_profile') || '{}'); } catch (_) {}
+
+  if (!TelegramApp?.initData) return mergeProfile(saved);
+
   try {
     const result = await request('/api/profile', {
       method: 'POST',
       body: JSON.stringify({ init_data: TelegramApp.initData }),
     });
-    const merged = { ...bootstrapProfile, ...result };
+    const merged = mergeProfile(saved, result);
     localStorage.setItem('americano_profile', JSON.stringify(merged));
     return merged;
   } catch (error) {
     console.warn('Profile API fallback:', error);
-    const saved = localStorage.getItem('americano_profile');
-    return saved ? { ...bootstrapProfile, ...JSON.parse(saved) } : bootstrapProfile;
+    return mergeProfile(saved);
   }
 }
 
@@ -101,5 +130,5 @@ export function saveLocalOrder(order) {
 }
 
 export function saveOptimisticProfile(profile) {
-  localStorage.setItem('americano_profile', JSON.stringify(profile));
+  localStorage.setItem('americano_profile', JSON.stringify(mergeProfile(profile)));
 }
