@@ -1,0 +1,66 @@
+/* Mobile fixes: smaller promo block and reliable image sizing */
+@media (max-width: 539px) {
+  .hero {
+    min-height: 194px;
+    padding: 13px;
+    border-radius: 18px;
+  }
+
+  .hero-copy {
+    width: 66%;
+    padding-top: 2px;
+  }
+
+  .hero h2 {
+    font-size: 18px;
+    line-height: 1.06;
+    max-width: 190px;
+    margin-bottom: 5px;
+  }
+
+  .hero h2 strong {
+    font-size: 22px;
+    margin-top: 5px;
+  }
+
+  .hero p {
+    font-size: 11px;
+    line-height: 1.2;
+    margin: 6px 0;
+  }
+
+  .hero .primary {
+    padding: 9px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+
+  .hero-media {
+    right: 8px;
+    bottom: 7px;
+    width: 32%;
+    height: 50%;
+    overflow: hidden;
+  }
+
+  .cup-photo {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+  }
+
+  .progress-ring {
+    width: 58px;
+    height: 58px;
+    right: 8px;
+    top: 8px;
+  }
+
+  .progress-ring span {
+    font-size: 14px;
+  }
+}
