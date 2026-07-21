@@ -22,7 +22,9 @@ if not BOT_TOKEN:
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://tahirovdd-lang.github.io/Cafe-Americano/")
 DB_PATH = os.getenv("DB_PATH", "americano.db")
 LOYALTY_STEP = 6
-BRAND = "AMERICANO"
+BRAND = "АМЕРИКАНО"
+PHONE = "+998 (91) 314-30-07"
+INSTAGRAM = "americano.coffeeuz"
 
 
 def parse_ids(value: str) -> set[int]:
@@ -38,7 +40,7 @@ BRANCH_ADMINS = {
 
 bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
-MENU_BTN = "☕ Открыть меню"
+MENU_BTN = "☕ Открыть Americano"
 CARD_BTN = "🎁 Моя кофейная карта"
 
 
@@ -142,7 +144,7 @@ def is_coffee(item: dict) -> bool:
     category = str(item.get("category", "")).lower()
     text = " ".join(str(item.get(k, "")) for k in ("id", "name", "name_ru", "name_lang")).lower()
     markers = ("coffee", "кофе", "qahva", "espresso", "americano", "cappuccino", "latte", "раф", "flat white")
-    return category in {"coffee", "кофе", "qahva"} or any(x in text for x in markers)
+    return category in {"coffee", "hot", "кофе", "qahva"} or any(x in text for x in markers)
 
 
 def coffee_prices(items: list[dict]) -> list[int]:
@@ -189,27 +191,51 @@ def card_text(user_id: int) -> str:
     progress = int(row["progress"] if row else 0)
     total = int(row["coffee_total"] if row else 0)
     gifts = int(row["free_total"] if row else 0)
-    marks = " ".join("☕" if i < progress else "○" for i in range(LOYALTY_STEP))
+    marks = " ".join("☕" if i < progress else "🎁" if i == LOYALTY_STEP - 1 else "○" for i in range(LOYALTY_STEP))
     left = LOYALTY_STEP - progress
-    next_line = "🎉 Следующий кофе бесплатно!" if left == 1 else f"До бесплатного кофе осталось: <b>{left}</b>"
+    next_line = "🎉 <b>Следующий кофе бесплатно!</b>" if left == 1 else f"До бесплатного кофе осталось: <b>{left}</b>"
     return (
-        f"☕ <b>{BRAND}</b>\n\n"
+        f"☕ <b>{BRAND}</b>\n"
+        "<i>Просто. Вкусно. С душой.</i>\n\n"
         f"{marks}\n"
         f"Прогресс: <b>{progress}/{LOYALTY_STEP}</b>\n"
         f"{next_line}\n\n"
         f"Всего учтено кофе: <b>{total}</b>\n"
         f"Получено подарков: <b>{gifts}</b>\n\n"
-        "Карта действует во всех трёх филиалах Americano."
+        "Карта действует во всех трёх филиалах Американо.\n"
+        f"📞 {PHONE}\n📸 @{INSTAGRAM}"
     )
+
+
+def history_text(user_id: int) -> str:
+    with closing(db()) as conn:
+        rows = conn.execute(
+            "SELECT order_id,branch_name,coffee_qty,free_qty,final_total,created_at FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 10",
+            (user_id,),
+        ).fetchall()
+    if not rows:
+        return "🧾 <b>История заказов</b>\n\nУ вас пока нет оформленных заказов."
+    text = "🧾 <b>Последние заказы</b>"
+    for row in rows:
+        date = str(row["created_at"]).replace("T", " ")[:16]
+        text += (
+            f"\n\n<b>{esc(row['order_id'])}</b> · {date}\n"
+            f"🏪 {esc(row['branch_name'])}\n"
+            f"☕ Кофе: <b>{row['coffee_qty']}</b> · Подарков: <b>{row['free_qty']}</b>\n"
+            f"💰 К оплате: <b>{money(row['final_total'])}</b> сум"
+        )
+    return text
 
 
 @dp.message(CommandStart())
 async def start(message: types.Message):
     upsert_user(message.from_user)
     await message.answer(
-        "☕ <b>Добро пожаловать в сеть кофеен Americano!</b>\n\n"
-        "Бот автоматически считает покупки во всех трёх филиалах. "
-        "Каждый шестой кофе — бесплатно. Кассиру ничего подтверждать не нужно.",
+        f"☕ <b>Добро пожаловать в сеть кофеен {BRAND}!</b>\n"
+        "<i>Просто. Вкусно. С душой.</i>\n\n"
+        "Бот автоматически считает кофе во всех трёх филиалах. "
+        "Каждый шестой кофе — бесплатно. Кассиру ничего подтверждать не нужно.\n\n"
+        f"📞 {PHONE}\n📸 @{INSTAGRAM}",
         reply_markup=keyboard(),
     )
 
@@ -227,6 +253,12 @@ async def card(message: types.Message):
     await message.answer(card_text(message.from_user.id), reply_markup=keyboard())
 
 
+@dp.message(Command("history"))
+async def history(message: types.Message):
+    upsert_user(message.from_user)
+    await message.answer(history_text(message.from_user.id), reply_markup=keyboard())
+
+
 @dp.message(Command("stats"))
 async def stats(message: types.Message):
     if message.from_user.id not in ADMIN_IDS:
@@ -236,23 +268,30 @@ async def stats(message: types.Message):
         orders = conn.execute("SELECT COUNT(*) n FROM orders").fetchone()["n"]
         coffee = conn.execute("SELECT COALESCE(SUM(coffee_qty),0) n FROM orders").fetchone()["n"]
         gifts = conn.execute("SELECT COALESCE(SUM(free_qty),0) n FROM orders").fetchone()["n"]
-        rows = conn.execute(
-            "SELECT branch_name,COUNT(*) orders,COALESCE(SUM(coffee_qty),0) coffee,COALESCE(SUM(free_qty),0) gifts FROM orders GROUP BY branch_id,branch_name"
-        ).fetchall()
-    text = f"📊 <b>Статистика Americano</b>\n\nКлиентов: <b>{users}</b>\nЗаказов: <b>{orders}</b>\nКофе: <b>{coffee}</b>\nПодарков: <b>{gifts}</b>"
+        rows = conn.execute("SELECT branch_name,COUNT(*) orders,COALESCE(SUM(coffee_qty),0) coffee,COALESCE(SUM(free_qty),0) gifts FROM orders GROUP BY branch_id,branch_name").fetchall()
+    text = f"📊 <b>Статистика {BRAND}</b>\n\nКлиентов: <b>{users}</b>\nЗаказов: <b>{orders}</b>\nКофе: <b>{coffee}</b>\nПодарков: <b>{gifts}</b>"
     for row in rows:
         text += f"\n\n🏪 {esc(row['branch_name'])}\nЗаказов: <b>{row['orders']}</b> · Кофе: <b>{row['coffee']}</b> · Подарков: <b>{row['gifts']}</b>"
     await message.answer(text)
 
 
 @dp.message(F.web_app_data)
-async def webapp_order(message: types.Message):
+async def webapp_data(message: types.Message):
     try:
         data = json.loads(message.web_app_data.data)
         if not isinstance(data, dict):
             raise ValueError
     except (json.JSONDecodeError, ValueError):
-        await message.answer("Не удалось прочитать заказ. Откройте меню и попробуйте ещё раз.")
+        await message.answer("Не удалось прочитать данные. Откройте приложение и попробуйте ещё раз.")
+        return
+
+    action = str(data.get("action") or "order")
+    upsert_user(message.from_user)
+    if action == "card":
+        await message.answer(card_text(message.from_user.id), reply_markup=keyboard())
+        return
+    if action == "history":
+        await message.answer(history_text(message.from_user.id), reply_markup=keyboard())
         return
 
     items = data.get("items") if isinstance(data.get("items"), list) else []
@@ -261,14 +300,12 @@ async def webapp_order(message: types.Message):
     branch_name = str(data.get("branch_name") or branch_id or "Филиал")
     order_id = str(data.get("order_id") or f"AM-{message.from_user.id}-{int(datetime.now().timestamp())}")
     original_total = to_int(data.get("total_num", data.get("total")))
-
     if not branch_id:
         await message.answer("Выберите филиал и повторите заказ.")
         return
 
     upsert_user(message.from_user, phone)
     prices = coffee_prices(items)
-
     with closing(db()) as conn:
         if conn.execute("SELECT 1 FROM orders WHERE order_id=?", (order_id,)).fetchone():
             await message.answer("Этот заказ уже был обработан.")
@@ -276,23 +313,10 @@ async def webapp_order(message: types.Message):
 
     loyalty = apply_loyalty(message.from_user.id, prices)
     final_total = max(0, original_total - loyalty["discount"])
-
     with closing(db()) as conn:
         conn.execute(
             "INSERT INTO orders VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                order_id,
-                message.from_user.id,
-                branch_id,
-                branch_name,
-                loyalty["coffee_qty"],
-                loyalty["free_qty"],
-                loyalty["discount"],
-                original_total,
-                final_total,
-                json.dumps(data, ensure_ascii=False),
-                now(),
-            ),
+            (order_id, message.from_user.id, branch_id, branch_name, loyalty["coffee_qty"], loyalty["free_qty"], loyalty["discount"], original_total, final_total, json.dumps(data, ensure_ascii=False), now()),
         )
         conn.commit()
 
@@ -305,10 +329,8 @@ async def webapp_order(message: types.Message):
 
     admin_text = (
         f"📩 <b>НОВЫЙ ЗАКАЗ — {BRAND}</b>\n\n"
-        f"🧾 Заказ: <b>{esc(order_id)}</b>\n"
-        f"🏪 Филиал: <b>{esc(branch_name)}</b>\n"
-        f"👤 Клиент: {user_link(message.from_user)}\n"
-        f"📞 Телефон: <b>{esc(phone or '—')}</b>\n"
+        f"🧾 Заказ: <b>{esc(order_id)}</b>\n🏪 Филиал: <b>{esc(branch_name)}</b>\n"
+        f"👤 Клиент: {user_link(message.from_user)}\n📞 Телефон: <b>{esc(phone or '—')}</b>\n"
         f"🚚 Получение: <b>{esc(data.get('fulfillment') or '—')}</b>\n"
         f"💳 Оплата: <b>{esc(data.get('payment_label') or data.get('payment_method') or '—')}</b>\n"
         f"📍 Адрес: <b>{esc(data.get('address') or '—')}</b>\n\n"
@@ -318,7 +340,6 @@ async def webapp_order(message: types.Message):
         f"\nСкидка: <b>{money(loyalty['discount'])}</b> сум"
         f"\n💰 К оплате: <b>{money(final_total)}</b> сум"
     )
-
     for admin_id in BRANCH_ADMINS.get(branch_id, ADMIN_IDS):
         try:
             await bot.send_message(admin_id, admin_text)
