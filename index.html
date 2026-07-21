@@ -2,11 +2,11 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <meta name="theme-color" content="#013F4A">
   <title>AMERICANO — Просто. Вкусно. С душой.</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <div class="app">
@@ -32,13 +32,13 @@
       <div class="hero">
         <div class="progress-ring" id="progressRing"><span data-progress>0/6</span></div>
         <div class="hero-copy">
-          <h2>Каждый 6-й кофе<strong>в подарок!</strong></h2>
+          <h2>Каждый 6-й кофе<strong>В подарок!</strong></h2>
           <p>Действует во всех 3 филиалах</p>
           <p><b data-left>6</b> кофе до подарка</p>
           <button class="primary" onclick="requestCard()">🎁 Подробнее</button>
         </div>
         <div class="hero-media">
-          <img class="cup-photo" src="https://pngimg.com/uploads/paper_coffee_cup/paper_coffee_cup_PNG7103.png" alt="Стакан AMERICANO">
+          <img class="cup-photo" src="images/americano-cup.png" alt="Стакан Americano">
         </div>
       </div>
     </div>
@@ -57,11 +57,15 @@
             <div class="stamps"></div>
           </div>
           <div class="card-copy">
-            <h3><span data-progress>0/6</span> кофе</h3>
-            <p>До бесплатного кофе осталось <b data-left>6</b></p>
-            <p class="statline">Всего учтено: <span data-total-coffee>0</span></p>
-            <p class="statline">Получено подарков: <span data-gifts>0</span></p>
-            <button class="primary" onclick="requestCard()">Открыть карту гостя</button>
+            <div class="card-copy-top">
+              <h3><span data-progress>0/6</span> кофе</h3>
+              <p>До подарка осталось <b data-left>6</b> кофе</p>
+            </div>
+            <div class="card-stats-inline">
+              <span>Всего: <b data-total-coffee>0</b></span>
+              <span>Подарков: <b data-gifts>0</b></span>
+            </div>
+            <button class="primary" onclick="requestCard()">Открыть карту</button>
           </div>
         </div>
       </div>
@@ -115,6 +119,6 @@
   <button class="nav-btn" data-screen="profileScreen"><span>○</span>Профиль</button>
 </div></nav>
 <div class="toast" id="toast"></div>
-<script type="module" src="app.js?v=6"></script>
+<script type="module" src="app.js?v=7"></script>
 </body>
 </html>
