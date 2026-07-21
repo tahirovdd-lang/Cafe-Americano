@@ -1,16 +1,21 @@
 import asyncio
+import hashlib
+import hmac
 import html
 import json
 import logging
 import os
-import sqlite3
-from contextlib import closing
 from datetime import datetime
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command, CommandStart
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
+
+import database
+import loyalty
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("americano")
@@ -19,10 +24,10 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN не найден в переменных окружения")
 
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://tahirovdd-lang.github.io/Cafe-Americano/")
-DB_PATH = os.getenv("DB_PATH", "americano.db")
-LOYALTY_STEP = 6
-BRAND = "АМЕРИКАНО"
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://tahirovdd-lang.github.io/Cafe-Americano/?v=6")
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "").rstrip("/")
+PORT = int(os.getenv("PORT", "3000"))
+BRAND = "AMERICANO"
 PHONE = "+998 (91) 314-30-07"
 INSTAGRAM = "americano.coffeeuz"
 
@@ -44,183 +49,66 @@ MENU_BTN = "☕ Открыть Americano"
 CARD_BTN = "🎁 Моя кофейная карта"
 
 
-def keyboard() -> ReplyKeyboardMarkup:
+def esc(value) -> str:
+    return html.escape(str(value or ""))
+
+
+def money(value) -> str:
+    return f"{loyalty.to_int(value):,}".replace(",", " ")
+
+
+def remember_user(user: types.User, phone: str = "") -> None:
+    database.upsert_user(user.id, user.username or "", user.first_name or "", phone)
+
+
+def webapp_url(user_id: int) -> str:
+    p = loyalty.profile(user_id)
+    parts = urlsplit(WEBAPP_URL)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.update({
+        "progress": str(p["progress"]),
+        "left": str(p["left"]),
+        "coffee_total": str(p["coffee_total"]),
+        "free_total": str(p["free_total"]),
+    })
+    if PUBLIC_API_URL:
+        query["api"] = PUBLIC_API_URL
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+def keyboard(user_id: int) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=MENU_BTN, web_app=WebAppInfo(url=WEBAPP_URL))],
+            [KeyboardButton(text=MENU_BTN, web_app=WebAppInfo(url=webapp_url(user_id)))],
             [KeyboardButton(text=CARD_BTN)],
         ],
         resize_keyboard=True,
     )
 
 
-def db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH, timeout=30)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def init_db() -> None:
-    folder = os.path.dirname(DB_PATH)
-    if folder:
-        os.makedirs(folder, exist_ok=True)
-    with closing(db()) as conn:
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS users(
-                user_id INTEGER PRIMARY KEY,
-                username TEXT,
-                first_name TEXT,
-                phone TEXT,
-                progress INTEGER NOT NULL DEFAULT 0,
-                coffee_total INTEGER NOT NULL DEFAULT 0,
-                free_total INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS orders(
-                order_id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                branch_id TEXT,
-                branch_name TEXT,
-                coffee_qty INTEGER NOT NULL DEFAULT 0,
-                free_qty INTEGER NOT NULL DEFAULT 0,
-                discount INTEGER NOT NULL DEFAULT 0,
-                original_total INTEGER NOT NULL DEFAULT 0,
-                final_total INTEGER NOT NULL DEFAULT 0,
-                payload TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-            """
-        )
-        conn.commit()
-
-
-def now() -> str:
-    return datetime.now().isoformat(timespec="seconds")
-
-
-def esc(value) -> str:
-    return html.escape(str(value or ""))
-
-
-def to_int(value) -> int:
-    try:
-        return max(0, int(float(value)))
-    except (TypeError, ValueError):
-        return 0
-
-
-def money(value) -> str:
-    return f"{to_int(value):,}".replace(",", " ")
-
-
-def upsert_user(user: types.User, phone: str = "") -> None:
-    stamp = now()
-    with closing(db()) as conn:
-        conn.execute(
-            """
-            INSERT INTO users(user_id,username,first_name,phone,created_at,updated_at)
-            VALUES(?,?,?,?,?,?)
-            ON CONFLICT(user_id) DO UPDATE SET
-              username=excluded.username,
-              first_name=excluded.first_name,
-              phone=CASE WHEN excluded.phone<>'' THEN excluded.phone ELSE users.phone END,
-              updated_at=excluded.updated_at
-            """,
-            (user.id, user.username or "", user.first_name or "", phone, stamp, stamp),
-        )
-        conn.commit()
-
-
-def get_user(user_id: int):
-    with closing(db()) as conn:
-        return conn.execute("SELECT * FROM users WHERE user_id=?", (user_id,)).fetchone()
-
-
-def is_coffee(item: dict) -> bool:
-    if item.get("is_coffee") is True:
-        return True
-    category = str(item.get("category", "")).lower()
-    text = " ".join(str(item.get(k, "")) for k in ("id", "name", "name_ru", "name_lang")).lower()
-    markers = ("coffee", "кофе", "qahva", "espresso", "americano", "cappuccino", "latte", "раф", "flat white")
-    return category in {"coffee", "hot", "кофе", "qahva"} or any(x in text for x in markers)
-
-
-def coffee_prices(items: list[dict]) -> list[int]:
-    result = []
-    for item in items:
-        if is_coffee(item):
-            result.extend([to_int(item.get("price"))] * to_int(item.get("qty")))
-    return result
-
-
-def apply_loyalty(user_id: int, prices: list[int]) -> dict:
-    with closing(db()) as conn:
-        conn.execute("BEGIN IMMEDIATE")
-        user = conn.execute("SELECT * FROM users WHERE user_id=?", (user_id,)).fetchone()
-        progress_before = int(user["progress"] if user else 0)
-        coffee_qty = len(prices)
-        free_qty = (progress_before + coffee_qty) // LOYALTY_STEP
-        progress_after = (progress_before + coffee_qty) % LOYALTY_STEP
-        discount = sum(sorted(prices)[:free_qty]) if free_qty else 0
-        conn.execute(
-            """UPDATE users SET progress=?, coffee_total=coffee_total+?,
-               free_total=free_total+?, updated_at=? WHERE user_id=?""",
-            (progress_after, coffee_qty, free_qty, now(), user_id),
-        )
-        conn.commit()
-    return {
-        "coffee_qty": coffee_qty,
-        "free_qty": free_qty,
-        "progress_before": progress_before,
-        "progress_after": progress_after,
-        "left": LOYALTY_STEP - progress_after,
-        "discount": discount,
-    }
-
-
-def user_link(user: types.User) -> str:
-    if user.username:
-        return f'<a href="https://t.me/{esc(user.username)}">@{esc(user.username)}</a>'
-    return f'<a href="tg://user?id={user.id}">{esc(user.first_name or "Клиент")}</a>'
-
-
 def card_text(user_id: int) -> str:
-    row = get_user(user_id)
-    progress = int(row["progress"] if row else 0)
-    total = int(row["coffee_total"] if row else 0)
-    gifts = int(row["free_total"] if row else 0)
-    marks = " ".join("☕" if i < progress else "🎁" if i == LOYALTY_STEP - 1 else "○" for i in range(LOYALTY_STEP))
-    left = LOYALTY_STEP - progress
-    next_line = "🎉 <b>Следующий кофе бесплатно!</b>" if left == 1 else f"До бесплатного кофе осталось: <b>{left}</b>"
+    p = loyalty.profile(user_id)
+    marks = " ".join("☕" if i < p["progress"] else "🎁" if i == p["step"] - 1 else "○" for i in range(p["step"]))
+    next_line = "🎉 <b>Следующий кофе бесплатно!</b>" if p["left"] == 1 else f"До бесплатного кофе осталось: <b>{p['left']}</b>"
     return (
-        f"☕ <b>{BRAND}</b>\n"
-        "<i>Просто. Вкусно. С душой.</i>\n\n"
-        f"{marks}\n"
-        f"Прогресс: <b>{progress}/{LOYALTY_STEP}</b>\n"
-        f"{next_line}\n\n"
-        f"Всего учтено кофе: <b>{total}</b>\n"
-        f"Получено подарков: <b>{gifts}</b>\n\n"
-        "Карта действует во всех трёх филиалах Американо.\n"
+        f"☕ <b>{BRAND}</b>\n<i>Просто. Вкусно. С душой.</i>\n\n"
+        f"{marks}\nПрогресс: <b>{p['progress']}/{p['step']}</b>\n{next_line}\n\n"
+        f"Всего учтено кофе: <b>{p['coffee_total']}</b>\n"
+        f"Получено подарков: <b>{p['free_total']}</b>\n\n"
+        "Карта действует во всех трёх филиалах Americano.\n"
         f"📞 {PHONE}\n📸 @{INSTAGRAM}"
     )
 
 
 def history_text(user_id: int) -> str:
-    with closing(db()) as conn:
-        rows = conn.execute(
-            "SELECT order_id,branch_name,coffee_qty,free_qty,final_total,created_at FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 10",
-            (user_id,),
-        ).fetchall()
+    rows = database.get_orders(user_id)
     if not rows:
         return "🧾 <b>История заказов</b>\n\nУ вас пока нет оформленных заказов."
     text = "🧾 <b>Последние заказы</b>"
     for row in rows:
         date = str(row["created_at"]).replace("T", " ")[:16]
         text += (
-            f"\n\n<b>{esc(row['order_id'])}</b> · {date}\n"
-            f"🏪 {esc(row['branch_name'])}\n"
+            f"\n\n<b>{esc(row['order_id'])}</b> · {date}\n🏪 {esc(row['branch_name'])}\n"
             f"☕ Кофе: <b>{row['coffee_qty']}</b> · Подарков: <b>{row['free_qty']}</b>\n"
             f"💰 К оплате: <b>{money(row['final_total'])}</b> сум"
         )
@@ -229,48 +117,43 @@ def history_text(user_id: int) -> str:
 
 @dp.message(CommandStart())
 async def start(message: types.Message):
-    upsert_user(message.from_user)
+    remember_user(message.from_user)
     await message.answer(
         f"☕ <b>Добро пожаловать в сеть кофеен {BRAND}!</b>\n"
         "<i>Просто. Вкусно. С душой.</i>\n\n"
-        "Бот автоматически считает кофе во всех трёх филиалах. "
-        "Каждый шестой кофе — бесплатно. Кассиру ничего подтверждать не нужно.\n\n"
+        "Бот автоматически считает кофе во всех трёх филиалах. Каждый шестой кофе — бесплатно.\n\n"
         f"📞 {PHONE}\n📸 @{INSTAGRAM}",
-        reply_markup=keyboard(),
+        reply_markup=keyboard(message.from_user.id),
     )
 
 
 @dp.message(Command("menu"))
 @dp.message(F.text == MENU_BTN)
 async def menu(message: types.Message):
-    await message.answer("Откройте меню кнопкой ниже 👇", reply_markup=keyboard())
+    remember_user(message.from_user)
+    await message.answer("Откройте приложение кнопкой ниже 👇", reply_markup=keyboard(message.from_user.id))
 
 
 @dp.message(Command("card"))
 @dp.message(F.text == CARD_BTN)
 async def card(message: types.Message):
-    upsert_user(message.from_user)
-    await message.answer(card_text(message.from_user.id), reply_markup=keyboard())
+    remember_user(message.from_user)
+    await message.answer(card_text(message.from_user.id), reply_markup=keyboard(message.from_user.id))
 
 
 @dp.message(Command("history"))
 async def history(message: types.Message):
-    upsert_user(message.from_user)
-    await message.answer(history_text(message.from_user.id), reply_markup=keyboard())
+    remember_user(message.from_user)
+    await message.answer(history_text(message.from_user.id), reply_markup=keyboard(message.from_user.id))
 
 
 @dp.message(Command("stats"))
 async def stats(message: types.Message):
     if message.from_user.id not in ADMIN_IDS:
         return
-    with closing(db()) as conn:
-        users = conn.execute("SELECT COUNT(*) n FROM users").fetchone()["n"]
-        orders = conn.execute("SELECT COUNT(*) n FROM orders").fetchone()["n"]
-        coffee = conn.execute("SELECT COALESCE(SUM(coffee_qty),0) n FROM orders").fetchone()["n"]
-        gifts = conn.execute("SELECT COALESCE(SUM(free_qty),0) n FROM orders").fetchone()["n"]
-        rows = conn.execute("SELECT branch_name,COUNT(*) orders,COALESCE(SUM(coffee_qty),0) coffee,COALESCE(SUM(free_qty),0) gifts FROM orders GROUP BY branch_id,branch_name").fetchall()
-    text = f"📊 <b>Статистика {BRAND}</b>\n\nКлиентов: <b>{users}</b>\nЗаказов: <b>{orders}</b>\nКофе: <b>{coffee}</b>\nПодарков: <b>{gifts}</b>"
-    for row in rows:
+    s = database.stats()
+    text = f"📊 <b>Статистика {BRAND}</b>\n\nКлиентов: <b>{s['users']}</b>\nЗаказов: <b>{s['orders']}</b>\nКофе: <b>{s['coffee']}</b>\nПодарков: <b>{s['gifts']}</b>"
+    for row in s["branches"]:
         text += f"\n\n🏪 {esc(row['branch_name'])}\nЗаказов: <b>{row['orders']}</b> · Кофе: <b>{row['coffee']}</b> · Подарков: <b>{row['gifts']}</b>"
     await message.answer(text)
 
@@ -285,60 +168,52 @@ async def webapp_data(message: types.Message):
         await message.answer("Не удалось прочитать данные. Откройте приложение и попробуйте ещё раз.")
         return
 
+    remember_user(message.from_user, str(data.get("phone") or ""))
     action = str(data.get("action") or "order")
-    upsert_user(message.from_user)
     if action == "card":
-        await message.answer(card_text(message.from_user.id), reply_markup=keyboard())
+        await message.answer(card_text(message.from_user.id), reply_markup=keyboard(message.from_user.id))
         return
     if action == "history":
-        await message.answer(history_text(message.from_user.id), reply_markup=keyboard())
+        await message.answer(history_text(message.from_user.id), reply_markup=keyboard(message.from_user.id))
         return
 
     items = data.get("items") if isinstance(data.get("items"), list) else []
-    phone = str(data.get("phone") or "")
     branch_id = str(data.get("branch_id") or "")
     branch_name = str(data.get("branch_name") or branch_id or "Филиал")
     order_id = str(data.get("order_id") or f"AM-{message.from_user.id}-{int(datetime.now().timestamp())}")
-    original_total = to_int(data.get("total_num", data.get("total")))
+    original_total = loyalty.to_int(data.get("total_num", data.get("total")))
+    phone = str(data.get("phone") or "")
+
     if not branch_id:
         await message.answer("Выберите филиал и повторите заказ.")
         return
+    if database.order_exists(order_id):
+        await message.answer("Этот заказ уже был обработан.", reply_markup=keyboard(message.from_user.id))
+        return
 
-    upsert_user(message.from_user, phone)
-    prices = coffee_prices(items)
-    with closing(db()) as conn:
-        if conn.execute("SELECT 1 FROM orders WHERE order_id=?", (order_id,)).fetchone():
-            await message.answer("Этот заказ уже был обработан.")
-            return
-
-    loyalty = apply_loyalty(message.from_user.id, prices)
-    final_total = max(0, original_total - loyalty["discount"])
-    with closing(db()) as conn:
-        conn.execute(
-            "INSERT INTO orders VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            (order_id, message.from_user.id, branch_id, branch_name, loyalty["coffee_qty"], loyalty["free_qty"], loyalty["discount"], original_total, final_total, json.dumps(data, ensure_ascii=False), now()),
-        )
-        conn.commit()
+    result = loyalty.apply(message.from_user.id, loyalty.coffee_prices(items))
+    final_total = max(0, original_total - result["discount"])
+    database.save_order(
+        order_id=order_id, user_id=message.from_user.id, branch_id=branch_id,
+        branch_name=branch_name, coffee_qty=result["coffee_qty"], free_qty=result["free_qty"],
+        discount=result["discount"], original_total=original_total, final_total=final_total, payload=data,
+    )
 
     lines = []
     for item in items:
-        qty = to_int(item.get("qty"))
+        qty = loyalty.to_int(item.get("qty"))
         if qty:
             name = item.get("name_lang") or item.get("name_ru") or item.get("name") or item.get("id") or "—"
-            lines.append(f"• {esc(name)} × <b>{qty}</b> — {money(to_int(item.get('price')) * qty)} сум")
+            lines.append(f"• {esc(name)} × <b>{qty}</b> — {money(loyalty.to_int(item.get('price')) * qty)} сум")
 
     admin_text = (
-        f"📩 <b>НОВЫЙ ЗАКАЗ — {BRAND}</b>\n\n"
-        f"🧾 Заказ: <b>{esc(order_id)}</b>\n🏪 Филиал: <b>{esc(branch_name)}</b>\n"
-        f"👤 Клиент: {user_link(message.from_user)}\n📞 Телефон: <b>{esc(phone or '—')}</b>\n"
-        f"🚚 Получение: <b>{esc(data.get('fulfillment') or '—')}</b>\n"
-        f"💳 Оплата: <b>{esc(data.get('payment_label') or data.get('payment_method') or '—')}</b>\n"
-        f"📍 Адрес: <b>{esc(data.get('address') or '—')}</b>\n\n"
+        f"📩 <b>НОВЫЙ ЗАКАЗ — {BRAND}</b>\n\n🧾 Заказ: <b>{esc(order_id)}</b>\n"
+        f"🏪 Филиал: <b>{esc(branch_name)}</b>\n👤 Клиент: <a href=\"tg://user?id={message.from_user.id}\">{esc(message.from_user.first_name or 'Клиент')}</a>\n"
+        f"📞 Телефон: <b>{esc(phone or '—')}</b>\n🚚 Получение: <b>{esc(data.get('fulfillment') or '—')}</b>\n"
+        f"💳 Оплата: <b>{esc(data.get('payment_label') or data.get('payment_method') or '—')}</b>\n📍 Адрес: <b>{esc(data.get('address') or '—')}</b>\n\n"
         "☕ <b>Состав заказа:</b>\n" + ("\n".join(lines) or "• —") +
-        f"\n\nКофе в заказе: <b>{loyalty['coffee_qty']}</b>"
-        f"\nПодарочных кофе: <b>{loyalty['free_qty']}</b>"
-        f"\nСкидка: <b>{money(loyalty['discount'])}</b> сум"
-        f"\n💰 К оплате: <b>{money(final_total)}</b> сум"
+        f"\n\nКофе в заказе: <b>{result['coffee_qty']}</b>\nПодарочных кофе: <b>{result['free_qty']}</b>"
+        f"\nСкидка: <b>{money(result['discount'])}</b> сум\n💰 К оплате: <b>{money(final_total)}</b> сум"
     )
     for admin_id in BRANCH_ADMINS.get(branch_id, ADMIN_IDS):
         try:
@@ -346,23 +221,90 @@ async def webapp_data(message: types.Message):
         except Exception:
             logger.exception("Не удалось отправить заказ администратору %s", admin_id)
 
-    gift = f"\n🎁 Бесплатных кофе в заказе: <b>{loyalty['free_qty']}</b>." if loyalty["free_qty"] else ""
-    next_line = "🎉 Следующий кофе будет бесплатным!" if loyalty["left"] == 1 else f"До следующего бесплатного кофе осталось: <b>{loyalty['left']}</b>."
+    gift = f"\n🎁 Бесплатных кофе в заказе: <b>{result['free_qty']}</b>." if result["free_qty"] else ""
+    next_line = "🎉 Следующий кофе будет бесплатным!" if result["left"] == 1 else f"До следующего бесплатного кофе осталось: <b>{result['left']}</b>."
     await message.answer(
         f"✅ <b>Заказ принят!</b>\n🏪 {esc(branch_name)}\n💰 К оплате: <b>{money(final_total)}</b> сум{gift}\n\n{next_line}",
-        reply_markup=keyboard(),
+        reply_markup=keyboard(message.from_user.id),
     )
 
 
 @dp.message()
 async def fallback(message: types.Message):
-    await message.answer("Выберите нужное действие 👇", reply_markup=keyboard())
+    remember_user(message.from_user)
+    await message.answer("Выберите нужное действие 👇", reply_markup=keyboard(message.from_user.id))
+
+
+def validate_init_data(init_data: str) -> dict | None:
+    try:
+        values = dict(parse_qsl(init_data, keep_blank_values=True))
+        received_hash = values.pop("hash")
+        check_string = "\n".join(f"{key}={values[key]}" for key in sorted(values))
+        secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+        expected = hmac.new(secret, check_string.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, received_hash):
+            return None
+        return json.loads(values.get("user", "{}"))
+    except Exception:
+        return None
+
+
+@web.middleware
+async def cors(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        response = web.Response(status=204)
+    else:
+        response = await handler(request)
+    response.headers["Access-Control-Allow-Origin"] = "https://tahirovdd-lang.github.io"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Methods"] = "POST,GET,OPTIONS"
+    return response
+
+
+async def health(_: web.Request) -> web.Response:
+    return web.json_response({"ok": True, "service": "americano"})
+
+
+async def api_profile(request: web.Request) -> web.Response:
+    payload = await request.json()
+    user = validate_init_data(str(payload.get("init_data") or ""))
+    if not user or not user.get("id"):
+        raise web.HTTPUnauthorized(text="Invalid Telegram data")
+    database.upsert_user(int(user["id"]), str(user.get("username") or ""), str(user.get("first_name") or ""))
+    return web.json_response(loyalty.profile(int(user["id"])))
+
+
+async def api_orders(request: web.Request) -> web.Response:
+    payload = await request.json()
+    user = validate_init_data(str(payload.get("init_data") or ""))
+    if not user or not user.get("id"):
+        raise web.HTTPUnauthorized(text="Invalid Telegram data")
+    return web.json_response(database.get_orders(int(user["id"])))
+
+
+async def start_http_server() -> web.AppRunner:
+    app = web.Application(middlewares=[cors])
+    app.router.add_get("/", health)
+    app.router.add_get("/api/health", health)
+    app.router.add_post("/api/profile", api_profile)
+    app.router.add_post("/api/orders", api_orders)
+    app.router.add_options("/{tail:.*}", health)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, "0.0.0.0", PORT).start()
+    logger.info("Americano API started on port %s", PORT)
+    return runner
 
 
 async def main():
-    init_db()
+    database.init_db()
+    runner = await start_http_server()
     logger.info("Americano bot started")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await runner.cleanup()
+        await bot.session.close()
 
 
 if __name__ == "__main__":
