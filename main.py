@@ -13,10 +13,13 @@ STATIC_FILES = {
     "app.js",
     "api.js",
 }
+IMAGES_DIR = BASE_DIR / "images"
 
 
 async def index(_: web.Request) -> web.StreamResponse:
-    return web.FileResponse(BASE_DIR / "index.html")
+    response = web.FileResponse(BASE_DIR / "index.html")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 async def static_file(request: web.Request) -> web.StreamResponse:
@@ -36,6 +39,20 @@ async def static_file(request: web.Request) -> web.StreamResponse:
     return response
 
 
+async def image_file(request: web.Request) -> web.StreamResponse:
+    name = Path(request.match_info["name"]).name
+    path = IMAGES_DIR / name
+    if not path.is_file():
+        raise web.HTTPNotFound()
+
+    content_type, _ = mimetypes.guess_type(path.name)
+    response = web.FileResponse(path)
+    if content_type:
+        response.content_type = content_type
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
+
+
 async def favicon(_: web.Request) -> web.Response:
     return web.Response(status=204)
 
@@ -47,6 +64,7 @@ async def start_http_server() -> web.AppRunner:
     app.router.add_get("/", index)
     app.router.add_get("/favicon.ico", favicon)
     app.router.add_get("/{name:style\\.css|app\\.js|api\\.js}", static_file)
+    app.router.add_get("/images/{name}", image_file)
 
     # API
     app.router.add_get("/api/health", bot.health)
