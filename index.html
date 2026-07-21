@@ -6,7 +6,31 @@
   <meta name="theme-color" content="#013F4A">
   <title>AMERICANO — Просто. Вкусно. С душой.</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
+  <style>
+    .hero h2 strong{white-space:nowrap!important;display:block!important}
+    .guest-grid{grid-template-columns:minmax(0,46%) minmax(0,54%)!important;gap:10px!important;align-items:center!important}
+    .card-visual{min-height:118px!important;padding:11px!important}
+    .card-logo{font-size:11px!important;letter-spacing:2px!important;gap:7px!important}
+    .card-mark{width:36px!important;height:36px!important;font-size:24px!important}
+    .stamps{margin-top:20px!important;gap:4px!important}
+    .stamp{font-size:10px!important;border-width:1px!important}
+    .card-copy{gap:7px!important;min-width:0!important}
+    .card-summary{margin:0!important;font-size:12px!important;line-height:1.25!important;text-align:left!important;color:#fff!important;max-width:none!important}
+    .card-summary-muted{color:rgba(255,255,255,.68)!important}
+    .card-summary-muted b{color:#fff!important}
+    .card-copy .primary{width:100%!important;padding:10px 8px!important;font-size:12px!important}
+    @media(max-width:360px){
+      .guest-grid{grid-template-columns:minmax(0,44%) minmax(0,56%)!important;gap:8px!important}
+      .guest-card{padding:10px!important}
+      .card-visual{padding:9px!important;min-height:108px!important}
+      .card-logo{font-size:9px!important;letter-spacing:1px!important}
+      .card-mark{width:31px!important;height:31px!important;font-size:21px!important}
+      .stamps{margin-top:18px!important;gap:3px!important}
+      .card-summary{font-size:11px!important}
+      .card-copy .primary{font-size:11px!important;padding:9px 5px!important}
+    }
+  </style>
 </head>
 <body>
 <div class="app">
@@ -38,7 +62,7 @@
           <button class="primary" onclick="requestCard()">🎁 Подробнее</button>
         </div>
         <div class="hero-media">
-          <img class="cup-photo" src="images/americano-cup.png?v=2" alt="Стакан Americano">
+          <img class="cup-photo" src="images/americano-cup.png?v=3" alt="Стакан Americano">
         </div>
       </div>
     </div>
@@ -113,6 +137,6 @@
   <button class="nav-btn" data-screen="profileScreen"><span>○</span>Профиль</button>
 </div></nav>
 <div class="toast" id="toast"></div>
-<script type="module" src="app.js?v=8"></script>
+<script type="module" src="app.js?v=9"></script>
 </body>
 </html>
