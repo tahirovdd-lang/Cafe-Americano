@@ -24,12 +24,13 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN не найден в переменных окружения")
 
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://tahirovdd-lang.github.io/Cafe-Americano/?v=6")
-PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "").rstrip("/")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://bot-1784631986-2397-tahirov-dd.bothost.tech/?v=10")
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "https://bot-1784631986-2397-tahirov-dd.bothost.tech").rstrip("/")
 PORT = int(os.getenv("PORT", "3000"))
 BRAND = "AMERICANO"
 PHONE = "+998 (91) 314-30-07"
 INSTAGRAM = "americano.coffeeuz"
+INSTAGRAM_URL = "https://www.instagram.com/americano.coffeeuz/"
 
 
 def parse_ids(value: str) -> set[int]:
@@ -57,6 +58,10 @@ def money(value) -> str:
     return f"{loyalty.to_int(value):,}".replace(",", " ")
 
 
+def instagram_link() -> str:
+    return f'<a href="{INSTAGRAM_URL}">@{INSTAGRAM}</a>'
+
+
 def remember_user(user: types.User, phone: str = "") -> None:
     database.upsert_user(user.id, user.username or "", user.first_name or "", phone)
 
@@ -70,9 +75,8 @@ def webapp_url(user_id: int) -> str:
         "left": str(p["left"]),
         "coffee_total": str(p["coffee_total"]),
         "free_total": str(p["free_total"]),
+        "api": PUBLIC_API_URL,
     })
-    if PUBLIC_API_URL:
-        query["api"] = PUBLIC_API_URL
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
@@ -96,15 +100,15 @@ def card_text(user_id: int) -> str:
         f"Всего учтено кофе: <b>{p['coffee_total']}</b>\n"
         f"Получено подарков: <b>{p['free_total']}</b>\n\n"
         "Карта действует во всех трёх филиалах Americano.\n"
-        f"📞 {PHONE}\n📸 @{INSTAGRAM}"
+        f"📞 {PHONE}\n📸 {instagram_link()}"
     )
 
 
 def history_text(user_id: int) -> str:
-    rows = database.get_orders(user_id)
+    rows = database.get_orders(user_id, limit=50)
     if not rows:
         return "🧾 <b>История заказов</b>\n\nУ вас пока нет оформленных заказов."
-    text = "🧾 <b>Последние заказы</b>"
+    text = "🧾 <b>История заказов</b>"
     for row in rows:
         date = str(row["created_at"]).replace("T", " ")[:16]
         text += (
@@ -118,12 +122,15 @@ def history_text(user_id: int) -> str:
 @dp.message(CommandStart())
 async def start(message: types.Message):
     remember_user(message.from_user)
+    name = esc(message.from_user.first_name or "гость")
+    username = f"@{esc(message.from_user.username)}" if message.from_user.username else name
     await message.answer(
-        f"☕ <b>Добро пожаловать в сеть кофеен {BRAND}!</b>\n"
+        f"☕ <b>Добро пожаловать в {BRAND}, {username}!</b>\n"
         "<i>Просто. Вкусно. С душой.</i>\n\n"
         "Бот автоматически считает кофе во всех трёх филиалах. Каждый шестой кофе — бесплатно.\n\n"
-        f"📞 {PHONE}\n📸 @{INSTAGRAM}",
+        f"📞 {PHONE}\n📸 {instagram_link()}",
         reply_markup=keyboard(message.from_user.id),
+        disable_web_page_preview=True,
     )
 
 
@@ -138,7 +145,7 @@ async def menu(message: types.Message):
 @dp.message(F.text == CARD_BTN)
 async def card(message: types.Message):
     remember_user(message.from_user)
-    await message.answer(card_text(message.from_user.id), reply_markup=keyboard(message.from_user.id))
+    await message.answer(card_text(message.from_user.id), reply_markup=keyboard(message.from_user.id), disable_web_page_preview=True)
 
 
 @dp.message(Command("history"))
@@ -171,7 +178,7 @@ async def webapp_data(message: types.Message):
     remember_user(message.from_user, str(data.get("phone") or ""))
     action = str(data.get("action") or "order")
     if action == "card":
-        await message.answer(card_text(message.from_user.id), reply_markup=keyboard(message.from_user.id))
+        await message.answer(card_text(message.from_user.id), reply_markup=keyboard(message.from_user.id), disable_web_page_preview=True)
         return
     if action == "history":
         await message.answer(history_text(message.from_user.id), reply_markup=keyboard(message.from_user.id))
@@ -206,10 +213,11 @@ async def webapp_data(message: types.Message):
             name = item.get("name_lang") or item.get("name_ru") or item.get("name") or item.get("id") or "—"
             lines.append(f"• {esc(name)} × <b>{qty}</b> — {money(loyalty.to_int(item.get('price')) * qty)} сум")
 
+    tg_username = f"@{message.from_user.username}" if message.from_user.username else "не указан"
     admin_text = (
         f"📩 <b>НОВЫЙ ЗАКАЗ — {BRAND}</b>\n\n🧾 Заказ: <b>{esc(order_id)}</b>\n"
         f"🏪 Филиал: <b>{esc(branch_name)}</b>\n👤 Клиент: <a href=\"tg://user?id={message.from_user.id}\">{esc(message.from_user.first_name or 'Клиент')}</a>\n"
-        f"📞 Телефон: <b>{esc(phone or '—')}</b>\n🚚 Получение: <b>{esc(data.get('fulfillment') or '—')}</b>\n"
+        f"📲 Telegram: <b>{esc(tg_username)}</b>\n📞 Телефон: <b>{esc(phone or '—')}</b>\n🚚 Получение: <b>{esc(data.get('fulfillment') or '—')}</b>\n"
         f"💳 Оплата: <b>{esc(data.get('payment_label') or data.get('payment_method') or '—')}</b>\n📍 Адрес: <b>{esc(data.get('address') or '—')}</b>\n\n"
         "☕ <b>Состав заказа:</b>\n" + ("\n".join(lines) or "• —") +
         f"\n\nКофе в заказе: <b>{result['coffee_qty']}</b>\nПодарочных кофе: <b>{result['free_qty']}</b>"
@@ -255,7 +263,10 @@ async def cors(request: web.Request, handler):
         response = web.Response(status=204)
     else:
         response = await handler(request)
-    response.headers["Access-Control-Allow-Origin"] = "https://tahirovdd-lang.github.io"
+    origin = request.headers.get("Origin", "")
+    allowed = origin if origin.endswith("github.io") or origin.endswith("bothost.tech") else "https://tahirovdd-lang.github.io"
+    response.headers["Access-Control-Allow-Origin"] = allowed
+    response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     response.headers["Access-Control-Allow-Methods"] = "POST,GET,OPTIONS"
     return response
@@ -270,8 +281,14 @@ async def api_profile(request: web.Request) -> web.Response:
     user = validate_init_data(str(payload.get("init_data") or ""))
     if not user or not user.get("id"):
         raise web.HTTPUnauthorized(text="Invalid Telegram data")
-    database.upsert_user(int(user["id"]), str(user.get("username") or ""), str(user.get("first_name") or ""))
-    return web.json_response(loyalty.profile(int(user["id"])))
+    user_id = int(user["id"])
+    username = str(user.get("username") or "")
+    first_name = str(user.get("first_name") or "")
+    last_name = str(user.get("last_name") or "")
+    database.upsert_user(user_id, username, first_name)
+    result = loyalty.profile(user_id)
+    result.update({"user_id": user_id, "username": username, "first_name": first_name, "last_name": last_name})
+    return web.json_response(result)
 
 
 async def api_orders(request: web.Request) -> web.Response:
@@ -279,7 +296,7 @@ async def api_orders(request: web.Request) -> web.Response:
     user = validate_init_data(str(payload.get("init_data") or ""))
     if not user or not user.get("id"):
         raise web.HTTPUnauthorized(text="Invalid Telegram data")
-    return web.json_response(database.get_orders(int(user["id"])))
+    return web.json_response(database.get_orders(int(user["id"]), limit=50))
 
 
 async def start_http_server() -> web.AppRunner:
