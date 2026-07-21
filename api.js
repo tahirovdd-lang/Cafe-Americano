@@ -24,15 +24,19 @@ const explicitApi = new URLSearchParams(location.search).get('api');
 const DEFAULT_API = 'https://bot-1784631986-2397-tahirov-dd.bothost.tech';
 export const API_BASE = (
   explicitApi ||
-  localStorage.getItem('americano_api_url') ||
   (location.hostname.endsWith('bothost.tech') ? location.origin : DEFAULT_API)
 ).replace(/\/$/, '');
+
+// Remove an old API address saved by previous Mini App versions.
+localStorage.removeItem('americano_api_url');
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
       ...(options.headers || {}),
     },
   });
@@ -58,17 +62,18 @@ export async function loadProfile() {
 }
 
 export async function loadOrders() {
-  if (!TelegramApp?.initData) {
-    const saved = localStorage.getItem('americano_orders');
-    return saved ? JSON.parse(saved) : [];
-  }
   try {
+    if (!TelegramApp?.initData) {
+      const saved = localStorage.getItem('americano_orders');
+      return saved ? JSON.parse(saved) : [];
+    }
     const result = await request('/api/orders', {
       method: 'POST',
       body: JSON.stringify({ init_data: TelegramApp.initData }),
     });
-    localStorage.setItem('americano_orders', JSON.stringify(result));
-    return result;
+    const orders = Array.isArray(result) ? result : [];
+    localStorage.setItem('americano_orders', JSON.stringify(orders));
+    return orders;
   } catch (error) {
     console.warn('Orders API fallback:', error);
     const saved = localStorage.getItem('americano_orders');
