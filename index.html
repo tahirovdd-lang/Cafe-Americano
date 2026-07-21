@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#013F4A">
   <title>AMERICANO — Просто. Вкусно. С душой.</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <div class="app">
@@ -38,7 +38,7 @@
           <button class="primary" onclick="requestCard()">🎁 Подробнее</button>
         </div>
         <div class="hero-media">
-          <img class="cup-photo" src="images/americano-cup.png" alt="Стакан Americano">
+          <img class="cup-photo" src="images/americano-cup.png?v=2" alt="Стакан Americano">
         </div>
       </div>
     </div>
@@ -57,14 +57,8 @@
             <div class="stamps"></div>
           </div>
           <div class="card-copy">
-            <div class="card-copy-top">
-              <h3><span data-progress>0/6</span> кофе</h3>
-              <p>До подарка осталось <b data-left>6</b> кофе</p>
-            </div>
-            <div class="card-stats-inline">
-              <span>Всего: <b data-total-coffee>0</b></span>
-              <span>Подарков: <b data-gifts>0</b></span>
-            </div>
+            <p class="card-summary"><b><span data-progress>0/6</span> кофе</b> — до подарка осталось <b data-left>6</b></p>
+            <p class="card-summary card-summary-muted">Всего: <b data-total-coffee>0</b> — Подарков: <b data-gifts>0</b></p>
             <button class="primary" onclick="requestCard()">Открыть карту</button>
           </div>
         </div>
@@ -119,6 +113,6 @@
   <button class="nav-btn" data-screen="profileScreen"><span>○</span>Профиль</button>
 </div></nav>
 <div class="toast" id="toast"></div>
-<script type="module" src="app.js?v=7"></script>
+<script type="module" src="app.js?v=8"></script>
 </body>
 </html>
